@@ -198,16 +198,36 @@ async function loadAllData(user) {
   }
   const sid = roleData.reference_id;
 
-  // جيب Parent_ID من جدول Students أولاً
-  const { data: studentData } = await sb.from('Students').select('Parent_ID').eq('Student_ID', sid).single();
-  const parentId = studentData?.Parent_ID || sid;
+  // حدد نوع المستخدم وجيب البيانات بناءً عليه
+  const isParent = roleData.role === 'parent';
+  const parentId = isParent ? sid : null;
+
+  // إذا كان طالباً → جيب Parent_ID من Students
+  let effectiveParentId = parentId;
+  if (!isParent) {
+    const { data: studentData } = await sb.from('Students').select('Parent_ID').eq('Student_ID', sid).single();
+    effectiveParentId = studentData?.Parent_ID || sid;
+  }
+
+  // جيب Student_IDs للأب (إذا كان parent)
+  let studentIds = [];
+  if (isParent) {
+    const { data: children } = await sb.from('Students').select('Student_ID').eq('Parent_ID', sid).eq('is_active', true);
+    studentIds = children?.map(c => c.Student_ID) || [];
+  }
 
   const [upcoming, completed, offers, payments, xero] = await Promise.all([
-    sb.from('Lessons_Schedule').select('*').eq('Student_ID', sid).eq('is_active', true).order('Actual_Date', { ascending: true }),
-    sb.from('completed').select('*').eq('Student_ID', sid).eq('is_active', true).order('Actual_Date', { ascending: false }),
-    sb.from('Offers').select('*').eq('Parent_ID', parentId).eq('is_active', true),
-    sb.from('Payments').select('*').eq('Parent_ID', parentId).eq('is_active', true).order('Payment_Date', { ascending: false }),
-    sb.from('Xero_Advanced').select('Parent_Running_Balance').eq('Student_ID', sid).eq('is_active', true).order('Row_ID', { ascending: false }).limit(1)
+    isParent
+      ? sb.from('Lessons_Schedule').select('*').in('Student_ID', studentIds).eq('is_active', true).order('Actual_Date', { ascending: true })
+      : sb.from('Lessons_Schedule').select('*').eq('Student_ID', sid).eq('is_active', true).order('Actual_Date', { ascending: true }),
+    isParent
+      ? sb.from('completed').select('*').eq('Parent_No', sid).eq('is_active', true).order('Actual_Date', { ascending: false })
+      : sb.from('completed').select('*').eq('Student_ID', sid).eq('is_active', true).order('Actual_Date', { ascending: false }),
+    sb.from('Offers').select('*').eq('Parent_ID', effectiveParentId).eq('is_active', true),
+    sb.from('Payments').select('*').eq('Parent_ID', effectiveParentId).eq('is_active', true).order('Payment_Date', { ascending: false }),
+    isParent
+      ? sb.from('Xero_Advanced').select('Parent_Running_Balance').eq('Parent_ID', sid).eq('is_active', true).order('Row_ID', { ascending: false }).limit(1)
+      : sb.from('Xero_Advanced').select('Parent_Running_Balance').eq('Student_ID', sid).eq('is_active', true).order('Row_ID', { ascending: false }).limit(1)
   ]);
 
   document.getElementById('stat-upcoming').textContent = upcoming.data?.length ?? '—';
