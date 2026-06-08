@@ -124,7 +124,14 @@ a.meet-link:hover{text-decoration:underline}
 <script>
 const SUPABASE_URL = 'https://ccnbfyiuxyzlqgdhuufm.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_f5uSn-rV0qUpSoG9fBhCQw_2DmeQWSx';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    detectSessionInUrl: true,
+    autoRefreshToken: true,
+    persistSession: true,
+    flowType: 'implicit'
+  }
+});
 
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
@@ -138,7 +145,7 @@ async function init() {
 async function signInWithGoogle() {
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: 'https://leonsomiri.github.io/scopeark-portal/' }
+    options: { redirectTo: 'https://silver-pika-dc4d7c.netlify.app/' }
   });
   if (error) {
     const el = document.getElementById('login-error');
@@ -189,9 +196,6 @@ async function loadAllData(user) {
     showError('Your account is not linked yet. Please contact the admin.');
     return;
   }
-  console.log('User email:', user.email);
-console.log('Role data:', JSON.stringify(roleData));
-console.log('Role error:', JSON.stringify(roleError));
   const sid = roleData.reference_id;
 
   const [upcoming, completed, offers, payments, xero] = await Promise.all([
