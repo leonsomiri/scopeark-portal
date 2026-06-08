@@ -205,7 +205,7 @@ async function loadAllData(user) {
   const [upcoming, completed, offers, payments, xero] = await Promise.all([
     sb.from('Lessons_Schedule').select('*').eq('Student_ID', sid).eq('is_active', true).order('Actual_Date', { ascending: true }),
     sb.from('completed').select('*').eq('Student_ID', sid).eq('is_active', true).order('Actual_Date', { ascending: false }),
-    sb.from('Offers').select('*').eq('Student_ID', sid).eq('is_active', true),
+    sb.from('Offers').select('*').eq('Parent_ID', parentId).eq('is_active', true),
     sb.from('Payments').select('*').eq('Parent_ID', parentId).eq('is_active', true).order('Payment_Date', { ascending: false }),
     sb.from('Xero_Advanced').select('Parent_Running_Balance').eq('Student_ID', sid).eq('is_active', true).order('Row_ID', { ascending: false }).limit(1)
   ]);
