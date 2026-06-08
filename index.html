@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ScopeArk Student Portal</title>
+<title>ScopeArk Portal</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8f9fa;color:#1a1a1a;min-height:100vh}
@@ -70,6 +70,13 @@ tr:hover td{background:#fafafa}
 .badge-blue{background:#E6F1FB;color:#185FA5}
 
 .empty{text-align:center;padding:2.5rem;color:#aaa;font-size:13px}
+/* Teacher welcome card */
+.teacher-card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:1rem}
+.teacher-avatar{width:48px;height:48px;border-radius:50%;background:#e8f5f0;color:#1D9E75;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;flex-shrink:0}
+.teacher-info-name{font-size:16px;font-weight:500;color:#1a1a1a}
+.teacher-info-meta{font-size:12px;color:#888;margin-top:3px}
+/* Role badge in header */
+.role-pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500;background:#e8f5f0;color:#0F6E56;margin-left:6px}
 #error-msg{background:#FCEBEB;color:#A32D2D;padding:12px 16px;border-radius:8px;font-size:13px;display:none;margin-bottom:1rem;border:1px solid #f7c1c1}
 #login-error{font-size:13px;color:#e53935;display:none;margin-top:4px}
 a.meet-link{color:#1D9E75;font-size:12px;text-decoration:none}
@@ -108,16 +115,33 @@ a.meet-link:hover{text-decoration:underline}
       <div class="children-row" id="children-row"></div>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-grid">
+    <!-- Teacher welcome card (يظهر للمعلم فقط) -->
+    <div class="teacher-card" id="teacher-card" style="display:none">
+      <div class="teacher-avatar" id="teacher-avatar"></div>
+      <div>
+        <div class="teacher-info-name" id="teacher-info-name"></div>
+        <div class="teacher-info-meta" id="teacher-info-meta"></div>
+      </div>
+    </div>
+
+    <!-- Stats (student/parent view) -->
+    <div class="stats-grid" id="student-stats">
       <div class="stat-card"><div class="stat-label">Upcoming lessons</div><div class="stat-value" id="stat-upcoming">—</div></div>
       <div class="stat-card"><div class="stat-label">Completed lessons</div><div class="stat-value" id="stat-completed">—</div></div>
       <div class="stat-card"><div class="stat-label">Active offers</div><div class="stat-value" id="stat-offers">—</div></div>
       <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" id="stat-balance">—</div></div>
     </div>
 
-    <!-- Tables -->
-    <div class="card">
+    <!-- Stats (teacher view) -->
+    <div class="stats-grid" id="teacher-stats" style="display:none">
+      <div class="stat-card"><div class="stat-label">Upcoming lessons</div><div class="stat-value" id="tstat-upcoming">—</div></div>
+      <div class="stat-card"><div class="stat-label">Completed lessons</div><div class="stat-value" id="tstat-completed">—</div></div>
+      <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value" id="tstat-students">—</div></div>
+      <div class="stat-card"><div class="stat-label">Subjects</div><div class="stat-value" id="tstat-subjects">—</div></div>
+    </div>
+
+    <!-- Tables (student/parent view) -->
+    <div class="card" id="student-tables">
       <div class="tabs">
         <button class="tab active" onclick="showTab('upcoming', this)">Upcoming</button>
         <button class="tab" onclick="showTab('completed', this)">Completed</button>
@@ -150,6 +174,27 @@ a.meet-link:hover{text-decoration:underline}
         </table>
       </div>
     </div>
+
+    <!-- Tables (teacher view) -->
+    <div class="card" id="teacher-tables" style="display:none">
+      <div class="tabs" id="teacher-tab-btns">
+        <button class="tab active" onclick="showTeacherTab('t-upcoming', this)">Upcoming</button>
+        <button class="tab" onclick="showTeacherTab('t-completed', this)">Completed</button>
+      </div>
+
+      <div id="tab-t-upcoming" class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Student</th><th>Subject</th><th>Stage</th><th>Time (Teacher)</th><th>Status</th><th>Link</th></tr></thead>
+          <tbody id="tbody-t-upcoming"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div id="tab-t-completed" class="table-wrap" style="display:none">
+        <table>
+          <thead><tr><th>Date</th><th>Student</th><th>Subject</th><th>Stage</th><th>Duration</th><th>Status</th></tr></thead>
+          <tbody id="tbody-t-completed"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -163,9 +208,11 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 // حالة الفلترة
 let allData = { upcoming: [], completed: [], offers: [], payments: [], xero: [] };
+let teacherData = { upcoming: [], completed: [] };
 let allChildren = [];
 let selectedChildId = 'all';
 let isParent = false;
+let isTeacher = false;
 
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
@@ -201,9 +248,18 @@ function showLogin() {
   document.getElementById('dashboard-view').style.display = 'none';
 }
 
+// ----- Student/Parent tabs -----
 function showTab(tab, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('#student-tables .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#student-tables [id^="tab-"]').forEach(t => t.style.display = 'none');
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).style.display = 'block';
+}
+
+// ----- Teacher tabs -----
+function showTeacherTab(tab, btn) {
+  document.querySelectorAll('#teacher-tab-btns .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#teacher-tables [id^="tab-"]').forEach(t => t.style.display = 'none');
   btn.classList.add('active');
   document.getElementById('tab-' + tab).style.display = 'block';
 }
@@ -211,7 +267,7 @@ function showTab(tab, btn) {
 function badge(status) {
   if (!status) return '<span class="badge badge-gray">—</span>';
   const s = status.toLowerCase();
-  if (['completed','done','active'].includes(s)) return `<span class="badge badge-green">${status}</span>`;
+  if (['completed','done','active','trail_done'].includes(s)) return `<span class="badge badge-green">${status}</span>`;
   if (['scheduled','confirmed'].includes(s)) return `<span class="badge badge-blue">${status}</span>`;
   if (s === 'pending') return `<span class="badge badge-amber">${status}</span>`;
   if (['cancelled','canceled','disabled'].includes(s)) return `<span class="badge badge-red">${status}</span>`;
@@ -234,8 +290,6 @@ function filterByChild(childId) {
 
 function getFilteredData() {
   if (!isParent || selectedChildId === 'all') return allData;
-
-  const child = allChildren.find(c => c.Student_ID === selectedChildId);
   return {
     upcoming:  allData.upcoming.filter(r => r.Student_ID === selectedChildId),
     completed: allData.completed.filter(r => r.Student_ID === selectedChildId),
@@ -245,10 +299,12 @@ function getFilteredData() {
   };
 }
 
+// =========================================================
+//  RENDER — Student / Parent
+// =========================================================
 function renderAll() {
   const d = getFilteredData();
 
-  // Stats
   document.getElementById('stat-upcoming').textContent = d.upcoming.length;
   document.getElementById('stat-completed').textContent = d.completed.length;
   document.getElementById('stat-offers').textContent = d.offers.filter(o => o.Offer_Mode !== 'DISABLED').length;
@@ -315,6 +371,50 @@ function renderAll() {
   </tr>`).join('');
 }
 
+// =========================================================
+//  RENDER — Teacher
+// =========================================================
+function renderTeacher() {
+  const d = teacherData;
+
+  // Stats
+  const uniqueStudents = new Set(d.upcoming.map(r => r.Student_ID).concat(d.completed.map(r => r.Student_ID)));
+  const uniqueSubjects = new Set(d.upcoming.map(r => r.Subject).concat(d.completed.map(r => r.Subject)).filter(Boolean));
+
+  document.getElementById('tstat-upcoming').textContent = d.upcoming.length;
+  document.getElementById('tstat-completed').textContent = d.completed.length;
+  document.getElementById('tstat-students').textContent = uniqueStudents.size;
+  document.getElementById('tstat-subjects').textContent = uniqueSubjects.size;
+
+  // Upcoming table
+  const tu = document.getElementById('tbody-t-upcoming');
+  if (!d.upcoming.length) { tu.innerHTML = '<tr><td colspan="7" class="empty">No upcoming lessons</td></tr>'; }
+  else tu.innerHTML = d.upcoming.map(r => `<tr>
+    <td>${r.Teacher_Date || r.Actual_Date || '—'}</td>
+    <td style="font-weight:500;color:#1D9E75">${r.Student_Name || '—'}</td>
+    <td>${r.Subject || '—'}</td>
+    <td style="color:#888;font-size:12px">${r.Stage || '—'}</td>
+    <td>${r.Start_Time_Teacher || '—'} – ${r.End_Time_Teacher || '—'}</td>
+    <td>${badge(r.Status)}</td>
+    <td>${r.MEET_LINK ? `<a class="meet-link" href="${r.MEET_LINK}" target="_blank">Join</a>` : '—'}</td>
+  </tr>`).join('');
+
+  // Completed table
+  const tc = document.getElementById('tbody-t-completed');
+  if (!d.completed.length) { tc.innerHTML = '<tr><td colspan="6" class="empty">No completed lessons yet</td></tr>'; }
+  else tc.innerHTML = d.completed.map(r => `<tr>
+    <td>${r.Teacher_Date || r.Actual_Date || '—'}</td>
+    <td style="font-weight:500;color:#1D9E75">${r.Student_Name || '—'}</td>
+    <td>${r.Subject || '—'}</td>
+    <td style="color:#888;font-size:12px">${r.Stage || '—'}</td>
+    <td>${r.Duration_Hours != null ? r.Duration_Hours + 'h' : '—'}</td>
+    <td>${badge(r.Status)}</td>
+  </tr>`).join('');
+}
+
+// =========================================================
+//  LOAD DATA
+// =========================================================
 async function loadAllData(user) {
   const { data: roleData, error: roleError } = await sb.from('user_roles').select('*').eq('email', user.email).single();
   if (roleError || !roleData) {
@@ -323,13 +423,69 @@ async function loadAllData(user) {
   }
 
   const sid = roleData.reference_id;
-  isParent = roleData.role === 'parent';
+  isParent  = roleData.role === 'parent';
+  isTeacher = roleData.role === 'teacher';
 
+  // أضف role pill في الهيدر
+  const nameEl = document.getElementById('user-name');
+  nameEl.innerHTML = `${user.email} <span class="role-pill">${roleData.role}</span>`;
+
+  // =========================================================
+  //  TEACHER FLOW
+  // =========================================================
+  if (isTeacher) {
+    // أخفِ عناصر الطالب/الأب وأظهر عناصر المعلم
+    document.getElementById('student-stats').style.display  = 'none';
+    document.getElementById('student-tables').style.display = 'none';
+    document.getElementById('teacher-stats').style.display  = 'grid';
+    document.getElementById('teacher-tables').style.display = 'block';
+    document.getElementById('teacher-card').style.display   = 'flex';
+
+    // جيب بيانات المعلم
+    const { data: teacherInfo } = await sb.from('Teachers')
+      .select('Teacher_Name, Country, Timezone, Subject1, Subject2, Subject3')
+      .eq('Teacher_ID', sid)
+      .single();
+
+    if (teacherInfo) {
+      const initials = teacherInfo.Teacher_Name?.split(' ').map(w => w[0]).slice(0, 2).join('') || '?';
+      document.getElementById('teacher-avatar').textContent = initials;
+      document.getElementById('teacher-info-name').textContent = teacherInfo.Teacher_Name || '—';
+      const subjects = [teacherInfo.Subject1, teacherInfo.Subject2, teacherInfo.Subject3].filter(Boolean).join(' · ');
+      const tz = teacherInfo.Timezone || '';
+      document.getElementById('teacher-info-meta').textContent = [subjects, tz].filter(Boolean).join('  |  ');
+    }
+
+    // جيب الحصص
+    const [upcoming, completed] = await Promise.all([
+      sb.from('Lessons_Schedule')
+        .select('Lesson_ID,Student_ID,Student_Name,Subject,Stage,Actual_Date,Teacher_Date,Start_Time_Teacher,End_Time_Teacher,Status,MEET_LINK')
+        .eq('Teacher_ID', sid)
+        .eq('is_active', true)
+        .order('Actual_Date', { ascending: true }),
+      sb.from('completed')
+        .select('Lesson_ID,Student_ID,Student_Name,Subject,Stage,Actual_Date,Teacher_Date,Start_Time_Teacher,End_Time_Teacher,Status,Duration_Hours')
+        .eq('Teacher_ID', sid)
+        .eq('is_active', true)
+        .order('Actual_Date', { ascending: false })
+    ]);
+
+    teacherData = {
+      upcoming:  upcoming.data  || [],
+      completed: completed.data || []
+    };
+
+    renderTeacher();
+    return;
+  }
+
+  // =========================================================
+  //  STUDENT / PARENT FLOW
+  // =========================================================
   let effectiveParentId = sid;
   let studentIds = [];
 
   if (isParent) {
-    // جيب كل الأبناء
     const { data: children } = await sb.from('Students')
       .select('Student_ID, Student_Name, Parent_Name')
       .eq('Parent_ID', sid)
@@ -338,12 +494,10 @@ async function loadAllData(user) {
     allChildren = children || [];
     studentIds = allChildren.map(c => c.Student_ID);
 
-    // بطاقة الترحيب
     const parentName = allChildren[0]?.Parent_Name || '';
     document.getElementById('welcome-card').style.display = 'block';
     document.getElementById('welcome-name').innerHTML = `Welcome, <span>${parentName}</span>`;
 
-    // أزرار الأبناء
     const row = document.getElementById('children-row');
     let btns = `<button class="child-btn all-btn active" id="child-btn-all" onclick="filterByChild('all')">
       <div class="child-avatar">All</div>
@@ -362,12 +516,10 @@ async function loadAllData(user) {
     row.innerHTML = btns;
 
   } else {
-    // طالب عادي — جيب Parent_ID
     const { data: studentData } = await sb.from('Students').select('Parent_ID').eq('Student_ID', sid).single();
     effectiveParentId = studentData?.Parent_ID || sid;
   }
 
-  // جيب البيانات
   const [upcoming, completed, offers, payments, xero] = await Promise.all([
     isParent && studentIds.length
       ? sb.from('Lessons_Schedule').select('*').in('Student_ID', studentIds).eq('is_active', true).order('Actual_Date', { ascending: true })
