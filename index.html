@@ -71,10 +71,23 @@ tr:hover td{background:#fafafa}
 
 .empty{text-align:center;padding:2.5rem;color:#aaa;font-size:13px}
 /* Teacher welcome card */
-.teacher-card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:1rem}
-.teacher-avatar{width:48px;height:48px;border-radius:50%;background:#e8f5f0;color:#1D9E75;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;flex-shrink:0}
-.teacher-info-name{font-size:16px;font-weight:500;color:#1a1a1a}
-.teacher-info-meta{font-size:12px;color:#888;margin-top:3px}
+.teacher-card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:1rem}
+.teacher-avatar{width:48px;height:48px;border-radius:50%;background:#e8f5f0;color:#1D9E75;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;flex-shrink:0;margin-top:2px}
+.teacher-info-name{font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:6px}
+.teacher-meta-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.teacher-meta-item{display:flex;flex-direction:column;gap:1px}
+.teacher-meta-label{font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:0.4px}
+.teacher-meta-value{font-size:12px;color:#444;font-weight:500}
+.subject-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.subject-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500;background:#e8f5f0;color:#0F6E56;border:1px solid #c3e8d8}
+/* Filter bar */
+.filter-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #eee;flex-wrap:wrap}
+.filter-bar select,.filter-bar input[type=date]{font-size:12px;padding:5px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#333;outline:none;cursor:pointer;height:30px}
+.filter-bar select:focus,.filter-bar input[type=date]:focus{border-color:#1D9E75}
+.filter-label{font-size:11px;color:#888;white-space:nowrap}
+.filter-count{font-size:12px;color:#1D9E75;font-weight:600;margin-left:auto;white-space:nowrap}
+.reset-btn{font-size:12px;color:#888;background:#f5f5f5;border:1px solid #eee;border-radius:7px;padding:5px 11px;cursor:pointer;height:30px;white-space:nowrap}
+.reset-btn:hover{background:#eee;color:#333}
 /* Role badge in header */
 .role-pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500;background:#e8f5f0;color:#0F6E56;margin-left:6px}
 #error-msg{background:#FCEBEB;color:#A32D2D;padding:12px 16px;border-radius:8px;font-size:13px;display:none;margin-bottom:1rem;border:1px solid #f7c1c1}
@@ -118,9 +131,20 @@ a.meet-link:hover{text-decoration:underline}
     <!-- Teacher welcome card (يظهر للمعلم فقط) -->
     <div class="teacher-card" id="teacher-card" style="display:none">
       <div class="teacher-avatar" id="teacher-avatar"></div>
-      <div>
+      <div style="flex:1">
         <div class="teacher-info-name" id="teacher-info-name"></div>
-        <div class="teacher-info-meta" id="teacher-info-meta"></div>
+        <div class="teacher-meta-row">
+          <div class="teacher-meta-item">
+            <span class="teacher-meta-label">Country</span>
+            <span class="teacher-meta-value" id="teacher-meta-country">—</span>
+          </div>
+          <div style="width:1px;background:#eee;margin:2px 4px"></div>
+          <div class="teacher-meta-item">
+            <span class="teacher-meta-label">Timezone</span>
+            <span class="teacher-meta-value" id="teacher-meta-tz">—</span>
+          </div>
+        </div>
+        <div class="subject-tags" id="teacher-subject-tags"></div>
       </div>
     </div>
 
@@ -189,6 +213,19 @@ a.meet-link:hover{text-decoration:underline}
         </table>
       </div>
       <div id="tab-t-completed" class="table-wrap" style="display:none">
+        <!-- Filter bar -->
+        <div class="filter-bar">
+          <span class="filter-label">Subject:</span>
+          <select id="filter-subject" onchange="applyTeacherFilters()">
+            <option value="">All</option>
+          </select>
+          <span class="filter-label">From:</span>
+          <input type="date" id="filter-date-from" onchange="applyTeacherFilters()">
+          <span class="filter-label">To:</span>
+          <input type="date" id="filter-date-to" onchange="applyTeacherFilters()">
+          <button class="reset-btn" onclick="resetTeacherFilters()">✕ Reset</button>
+          <span class="filter-count" id="filter-count"></span>
+        </div>
         <table>
           <thead><tr><th>Date</th><th>Student</th><th>Subject</th><th>Stage</th><th>Duration</th><th>Status</th></tr></thead>
           <tbody id="tbody-t-completed"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
@@ -374,35 +411,64 @@ function renderAll() {
 // =========================================================
 //  RENDER — Teacher
 // =========================================================
-function renderTeacher() {
-  const d = teacherData;
 
-  // Stats
-  const uniqueStudents = new Set(d.upcoming.map(r => r.Student_ID).concat(d.completed.map(r => r.Student_ID)));
-  const uniqueSubjects = new Set(d.upcoming.map(r => r.Subject).concat(d.completed.map(r => r.Subject)).filter(Boolean));
+// حالة فلاتر الـ completed
+let tcFilterSubject = '';
+let tcFilterFrom    = '';
+let tcFilterTo      = '';
 
-  document.getElementById('tstat-upcoming').textContent = d.upcoming.length;
-  document.getElementById('tstat-completed').textContent = d.completed.length;
-  document.getElementById('tstat-students').textContent = uniqueStudents.size;
-  document.getElementById('tstat-subjects').textContent = uniqueSubjects.size;
+function populateSubjectFilter() {
+  const subjects = [...new Set(teacherData.completed.map(r => r.Subject).filter(Boolean))].sort();
+  const sel = document.getElementById('filter-subject');
+  sel.innerHTML = '<option value="">All</option>' +
+    subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+}
 
-  // Upcoming table
-  const tu = document.getElementById('tbody-t-upcoming');
-  if (!d.upcoming.length) { tu.innerHTML = '<tr><td colspan="7" class="empty">No upcoming lessons</td></tr>'; }
-  else tu.innerHTML = d.upcoming.map(r => `<tr>
-    <td>${r.Teacher_Date || r.Actual_Date || '—'}</td>
-    <td style="font-weight:500;color:#1D9E75">${r.Student_Name || '—'}</td>
-    <td>${r.Subject || '—'}</td>
-    <td style="color:#888;font-size:12px">${r.Stage || '—'}</td>
-    <td>${r.Start_Time_Teacher || '—'} – ${r.End_Time_Teacher || '—'}</td>
-    <td>${badge(r.Status)}</td>
-    <td>${r.MEET_LINK ? `<a class="meet-link" href="${r.MEET_LINK}" target="_blank">Join</a>` : '—'}</td>
-  </tr>`).join('');
+function applyTeacherFilters() {
+  tcFilterSubject = document.getElementById('filter-subject').value;
+  tcFilterFrom    = document.getElementById('filter-date-from').value;   // "YYYY-MM-DD"
+  tcFilterTo      = document.getElementById('filter-date-to').value;
+  renderTeacherCompleted();
+}
 
-  // Completed table
+function resetTeacherFilters() {
+  tcFilterSubject = ''; tcFilterFrom = ''; tcFilterTo = '';
+  document.getElementById('filter-subject').value   = '';
+  document.getElementById('filter-date-from').value = '';
+  document.getElementById('filter-date-to').value   = '';
+  renderTeacherCompleted();
+}
+
+// تحويل تاريخ من أي صيغة إلى YYYY-MM-DD للمقارنة
+function toISO(dateStr) {
+  if (!dateStr) return '';
+  // لو الصيغة M/D/YYYY أو MM/DD/YYYY
+  const parts = dateStr.split('/');
+  if (parts.length === 3) {
+    const [m, d, y] = parts;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  return dateStr; // لو مسبقاً YYYY-MM-DD
+}
+
+function renderTeacherCompleted() {
+  let rows = teacherData.completed;
+
+  if (tcFilterSubject) rows = rows.filter(r => r.Subject === tcFilterSubject);
+  if (tcFilterFrom)    rows = rows.filter(r => toISO(r.Teacher_Date || r.Actual_Date) >= tcFilterFrom);
+  if (tcFilterTo)      rows = rows.filter(r => toISO(r.Teacher_Date || r.Actual_Date) <= tcFilterTo);
+
+  // counter — يظهر فقط لو فيه فلتر مفعّل
+  const countEl = document.getElementById('filter-count');
+  const hasFilter = tcFilterSubject || tcFilterFrom || tcFilterTo;
+  countEl.textContent = hasFilter ? `${rows.length} lesson${rows.length !== 1 ? 's' : ''}` : '';
+
   const tc = document.getElementById('tbody-t-completed');
-  if (!d.completed.length) { tc.innerHTML = '<tr><td colspan="6" class="empty">No completed lessons yet</td></tr>'; }
-  else tc.innerHTML = d.completed.map(r => `<tr>
+  if (!rows.length) {
+    tc.innerHTML = '<tr><td colspan="6" class="empty">No lessons match the filter</td></tr>';
+    return;
+  }
+  tc.innerHTML = rows.map(r => `<tr>
     <td>${r.Teacher_Date || r.Actual_Date || '—'}</td>
     <td style="font-weight:500;color:#1D9E75">${r.Student_Name || '—'}</td>
     <td>${r.Subject || '—'}</td>
@@ -410,6 +476,45 @@ function renderTeacher() {
     <td>${r.Duration_Hours != null ? r.Duration_Hours + 'h' : '—'}</td>
     <td>${badge(r.Status)}</td>
   </tr>`).join('');
+}
+
+function renderTeacher() {
+  const d = teacherData;
+
+  // Stats (دائماً على كل البيانات بدون فلترة)
+  const uniqueStudents = new Set([
+    ...d.upcoming.map(r => r.Student_ID),
+    ...d.completed.map(r => r.Student_ID)
+  ]);
+  const uniqueSubjects = new Set([
+    ...d.upcoming.map(r => r.Subject),
+    ...d.completed.map(r => r.Subject)
+  ].filter(Boolean));
+
+  document.getElementById('tstat-upcoming').textContent  = d.upcoming.length;
+  document.getElementById('tstat-completed').textContent = d.completed.length;
+  document.getElementById('tstat-students').textContent  = uniqueStudents.size;
+  document.getElementById('tstat-subjects').textContent  = uniqueSubjects.size;
+
+  // Upcoming table — يستخدم Teacher_Date
+  const tu = document.getElementById('tbody-t-upcoming');
+  if (!d.upcoming.length) {
+    tu.innerHTML = '<tr><td colspan="7" class="empty">No upcoming lessons</td></tr>';
+  } else {
+    tu.innerHTML = d.upcoming.map(r => `<tr>
+      <td>${r.Teacher_Date || r.Actual_Date || '—'}</td>
+      <td style="font-weight:500;color:#1D9E75">${r.Student_Name || '—'}</td>
+      <td>${r.Subject || '—'}</td>
+      <td style="color:#888;font-size:12px">${r.Stage || '—'}</td>
+      <td>${r.Start_Time_Teacher || '—'} – ${r.End_Time_Teacher || '—'}</td>
+      <td>${badge(r.Status)}</td>
+      <td>${r.MEET_LINK ? `<a class="meet-link" href="${r.MEET_LINK}" target="_blank">Join</a>` : '—'}</td>
+    </tr>`).join('');
+  }
+
+  // Completed — ملأ الـ subject dropdown ثم render
+  populateSubjectFilter();
+  renderTeacherCompleted();
 }
 
 // =========================================================
@@ -451,9 +556,13 @@ async function loadAllData(user) {
       const initials = teacherInfo.Teacher_Name?.split(' ').map(w => w[0]).slice(0, 2).join('') || '?';
       document.getElementById('teacher-avatar').textContent = initials;
       document.getElementById('teacher-info-name').textContent = teacherInfo.Teacher_Name || '—';
-      const subjects = [teacherInfo.Subject1, teacherInfo.Subject2, teacherInfo.Subject3].filter(Boolean).join(' · ');
-      const tz = teacherInfo.Timezone || '';
-      document.getElementById('teacher-info-meta').textContent = [subjects, tz].filter(Boolean).join('  |  ');
+      document.getElementById('teacher-meta-country').textContent = teacherInfo.Country || '—';
+      document.getElementById('teacher-meta-tz').textContent = teacherInfo.Timezone || '—';
+
+      // Subject tags
+      const subjects = [teacherInfo.Subject1, teacherInfo.Subject2, teacherInfo.Subject3].filter(Boolean);
+      document.getElementById('teacher-subject-tags').innerHTML =
+        subjects.map(s => `<span class="subject-tag">${s}</span>`).join('');
     }
 
     // جيب الحصص
