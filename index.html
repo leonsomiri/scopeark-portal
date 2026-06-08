@@ -145,7 +145,7 @@ async function init() {
 async function signInWithGoogle() {
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: 'https://silver-pika-dc4d7c.netlify.app/' }
+options: { redirectTo: 'https://portal.scopeark.com' } 
   });
   if (error) {
     const el = document.getElementById('login-error');
