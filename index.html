@@ -528,7 +528,7 @@ async function loadAllData(user) {
   }
 
   const sid = roleData.reference_id;
-  isParent  = roleData.role === 'parent';
+  isParent  = roleData.role === 'parent' || roleData.role === 'student';
   isTeacher = roleData.role === 'teacher';
 
   // أضف role pill في الهيدر
